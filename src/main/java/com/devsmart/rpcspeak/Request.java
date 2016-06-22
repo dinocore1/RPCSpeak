@@ -10,9 +10,17 @@ public class Request {
     final String mMethod;
     final UBArray mArgs;
 
-    public Request(UBObject obj) {
-        mId = obj.get(RPCEndpoint.KEY_ID).asInt();
-        mMethod = obj.get(RPCEndpoint.KEY_METHOD).asString();
-        mArgs = obj.get(RPCEndpoint.KEY_ARGS).asArray();
+    public Request(int id, String method, UBArray args) {
+        mId = id;
+        mMethod = method;
+        mArgs = args;
     }
+
+    public Request(UBObject obj) {
+        this(obj.get(RPCEndpoint.KEY_ID).asInt(),
+                obj.get(RPCEndpoint.KEY_METHOD).asString(),
+                obj.get(RPCEndpoint.KEY_ARGS).asArray());
+    }
+
+
 }

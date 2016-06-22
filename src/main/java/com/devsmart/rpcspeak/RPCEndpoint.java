@@ -3,6 +3,7 @@ package com.devsmart.rpcspeak;
 
 import com.devsmart.ubjson.*;
 import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +14,7 @@ import java.util.HashMap;
 import java.util.concurrent.*;
 import static com.google.common.base.Preconditions.*;
 
-public class RPCEndpoint {
+public class RPCEndpoint implements RejectedExecutionHandler{
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RPCEndpoint.class);
 
@@ -25,6 +26,8 @@ public class RPCEndpoint {
     private static final String KEY_EXCEPTION = "except";
     public static final int TYPE_REQUEST = 0;
     public static final int TYPE_RESPONSE = 1;
+    public static final int TYPE_SHUTDOWN = 2;
+    private static final int MAX_REQUEST_ID = 0x10000;
 
     public static final UBValue EXCEPTION_UNKNOWNMETHOD = UBValueFactory.createString("Unknown Method");
     public static final UBValue EXCEPTION_BUSY = UBValueFactory.createString("Too Busy");
@@ -33,17 +36,23 @@ public class RPCEndpoint {
 
     private final UBReader mInputReader;
     private final UBWriter mOutputWriter;
+    private final BlockingQueue<Runnable> mServiceQueue;
+    private final ExecutorService mServiceExecutor;
     private final BlockingQueue<Runnable> mRequestQueue;
-    private ExecutorService mRequestServiceExecutorService;
+    private final ExecutorService mRequestExecutor;
+    private int mRequestId;
 
     private boolean mRunning;
     private ReaderThread mReaderThread;
 
     private final HashMap<String, RPC> mMethods = new HashMap<String, RPC>();
+    private final HashMap<Integer, HandleRequestTask> mRequests = new HashMap<Integer, HandleRequestTask>();
 
     RPCEndpoint(int maxNumThreads, int maxQueuedRequests, InputStream in, OutputStream out) {
+        mServiceQueue = new ArrayBlockingQueue<Runnable>(maxQueuedRequests);
+        mServiceExecutor = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mServiceQueue, this);
         mRequestQueue = new ArrayBlockingQueue<Runnable>(maxQueuedRequests);
-        mRequestServiceExecutorService = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mRequestQueue, mRequestRejectHandler);
+        mRequestExecutor = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mRequestQueue, this)
         mInputReader = new UBReader(in);
         mOutputWriter = new UBWriter(out);
     }
@@ -67,7 +76,7 @@ public class RPCEndpoint {
                             final int type = msgType.asInt();
                             switch (type) {
                                 case TYPE_REQUEST:
-                                    mRequestServiceExecutorService.execute(new HandleRequestTask(msgObj));
+                                    mServiceExecutor.execute(new HandleServiceTask(msgObj));
                                     break;
 
                                 case TYPE_RESPONSE:
@@ -88,11 +97,11 @@ public class RPCEndpoint {
         }
     }
 
-    private class HandleRequestTask implements Runnable {
+    private class HandleServiceTask implements Runnable {
 
         final Request mRequest;
 
-        public HandleRequestTask(UBObject msgObj) {
+        public HandleServiceTask(UBObject msgObj) {
            mRequest = new Request(msgObj);
         }
 
@@ -111,17 +120,29 @@ public class RPCEndpoint {
         }
     }
 
-    private final RejectedExecutionHandler mRequestRejectHandler = new RejectedExecutionHandler() {
+    private class HandleRequestTask implements Runnable {
+
+        final Request mRequest;
+
+        public HandleRequestTask(Request r) {
+            mRequest = r;
+        }
+
         @Override
-        public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
-            HandleRequestTask handleRequestTask = (HandleRequestTask)r;
-
-            UBObject respMsg = createBusyResponse(handleRequestTask.mRequest.mId);
-
-            sendMessage(respMsg);
+        public void run() {
 
         }
-    };
+    }
+
+    @Override
+    public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+        if(executor == mServiceExecutor) {
+            HandleServiceTask task = (HandleServiceTask) r;
+            UBObject respMsg = createBusyResponse(task.mRequest.mId);
+            sendMessage(respMsg);
+        }
+
+    }
 
 
     private static UBObject createResponse(int id, UBValue result) {
@@ -151,6 +172,13 @@ public class RPCEndpoint {
         return msgObj;
     }
 
+    private static UBObject createShutdownMessage() {
+        UBObject msgObj = UBValueFactory.createObject();
+        msgObj.put(KEY_TYPE, UBValueFactory.createInt(TYPE_SHUTDOWN));
+
+        return  msgObj;
+    }
+
     private synchronized void sendMessage(UBValue msg) {
         try {
             mOutputWriter.write(msg);
@@ -178,10 +206,14 @@ public class RPCEndpoint {
         }
 
         try {
-            mRequestServiceExecutorService.shutdown();
+            sendMessage(createShutdownMessage());
+            mRequestExecutor.shutdown();
+            mServiceExecutor.shutdown();
             mRunning = false;
             mReaderThread.join();
-        } catch (InterruptedException e) {
+            mInputReader.close();
+            mOutputWriter.close();
+        } catch (Exception e) {
             LOGGER.error("error shutting down: {}", e);
         }
     }
@@ -196,6 +228,23 @@ public class RPCEndpoint {
     }
 
     public UBValue RPC(String method, UBArray args) {
+
+        synchronized (this) {
+            mRequestId = mRequestId++ % MAX_REQUEST_ID;
+            HandleRequestTask requestTask = new HandleRequestTask(new Request(mRequestId, method, args));
+            mRequests.put(requestTask.mRequest.mId, requestTask);
+            try {
+                Future<?> future = mRequestExecutor.submit(requestTask);
+                future.wait();
+            } catch(InterruptedException e){
+                LOGGER.error("unepected interrupt: {}", e);
+                Throwables.propagate(e);
+
+            } catch (RejectedExecutionException e) {
+
+            }
+        }
+
 
     }
 

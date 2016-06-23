@@ -3,6 +3,8 @@ package com.devsmart.rpcspeak;
 
 import com.devsmart.ubjson.UBArray;
 import com.devsmart.ubjson.UBObject;
+import com.devsmart.ubjson.UBValue;
+import com.devsmart.ubjson.UBValueFactory;
 
 public class Request {
 
@@ -23,4 +25,12 @@ public class Request {
     }
 
 
+    public UBValue toMsg() {
+        UBObject retval = UBValueFactory.createObject();
+        retval.put(RPCEndpoint.KEY_TYPE, UBValueFactory.createInt(RPCEndpoint.TYPE_REQUEST));
+        retval.put(RPCEndpoint.KEY_ID, UBValueFactory.createInt(mId));
+        retval.put(RPCEndpoint.KEY_METHOD, UBValueFactory.createString(mMethod));
+        retval.put(RPCEndpoint.KEY_ARGS, mArgs);
+        return retval;
+    }
 }

@@ -38,8 +38,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     private final UBWriter mOutputWriter;
     private final BlockingQueue<Runnable> mServiceQueue;
     private final ExecutorService mServiceExecutor;
-    private final BlockingQueue<Runnable> mRequestQueue;
-    private final ExecutorService mRequestExecutor;
     private int mRequestId;
 
     private boolean mRunning;
@@ -51,8 +49,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     RPCEndpoint(int maxNumThreads, int maxQueuedRequests, InputStream in, OutputStream out) {
         mServiceQueue = new ArrayBlockingQueue<Runnable>(maxQueuedRequests);
         mServiceExecutor = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mServiceQueue, this);
-        mRequestQueue = new ArrayBlockingQueue<Runnable>(maxQueuedRequests);
-        mRequestExecutor = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mRequestQueue, this)
         mInputReader = new UBReader(in);
         mOutputWriter = new UBWriter(out);
     }
@@ -80,11 +76,14 @@ public class RPCEndpoint implements RejectedExecutionHandler{
                                     break;
 
                                 case TYPE_RESPONSE:
+                                    handleResponse(msgObj);
                                     break;
 
                                 default:
                                     throw new IOException("unknown message type:" + type);
                             }
+                        } else {
+                            LOGGER.warn("received unknown object: {}", msgObj);
                         }
                     }
 
@@ -120,17 +119,17 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         }
     }
 
-    private class HandleRequestTask implements Runnable {
+    private class HandleRequestTask {
 
         final Request mRequest;
+        public UBValue mResult;
+
+        void sendRequest() {
+            sendMessage(mRequest.toMsg());
+        }
 
         public HandleRequestTask(Request r) {
             mRequest = r;
-        }
-
-        @Override
-        public void run() {
-
         }
     }
 
@@ -179,11 +178,30 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         return  msgObj;
     }
 
-    private synchronized void sendMessage(UBValue msg) {
-        try {
-            mOutputWriter.write(msg);
-        } catch (IOException e) {
-            LOGGER.error("error sending message: {}", msg);
+    private void handleResponse(UBObject msgObj) {
+        final int id = msgObj.get(KEY_ID).asInt();
+        UBValue result = msgObj.get(KEY_RESULT);
+        if(result != null) {
+            HandleRequestTask task;
+            synchronized (this) {
+                task = mRequests.remove(id);
+            }
+
+            synchronized (task) {
+                task.mResult = result;
+                task.notify();
+            }
+
+        }
+    }
+
+    private void sendMessage(UBValue msg) {
+        synchronized (mOutputWriter) {
+            try {
+                mOutputWriter.write(msg);
+            } catch (IOException e) {
+                LOGGER.error("error sending message: {}", msg);
+            }
         }
     }
 
@@ -196,7 +214,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         mRunning = true;
         mReaderThread = new ReaderThread();
         mReaderThread.start();
-
     }
 
     public void shutdown() {
@@ -207,7 +224,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
         try {
             sendMessage(createShutdownMessage());
-            mRequestExecutor.shutdown();
             mServiceExecutor.shutdown();
             mRunning = false;
             mReaderThread.join();
@@ -228,24 +244,24 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     }
 
     public UBValue RPC(String method, UBArray args) {
-
+        HandleRequestTask requestTask;
         synchronized (this) {
-            mRequestId = mRequestId++ % MAX_REQUEST_ID;
-            HandleRequestTask requestTask = new HandleRequestTask(new Request(mRequestId, method, args));
+            mRequestId = (mRequestId + 1) % MAX_REQUEST_ID;
+            requestTask = new HandleRequestTask(new Request(mRequestId, method, args));
             mRequests.put(requestTask.mRequest.mId, requestTask);
-            try {
-                Future<?> future = mRequestExecutor.submit(requestTask);
-                future.wait();
-            } catch(InterruptedException e){
-                LOGGER.error("unepected interrupt: {}", e);
-                Throwables.propagate(e);
-
-            } catch (RejectedExecutionException e) {
-
-            }
         }
 
-
+        try {
+            synchronized (requestTask) {
+                requestTask.sendRequest();
+                requestTask.wait();
+                return requestTask.mResult;
+            }
+        } catch(InterruptedException e){
+            LOGGER.error("unepected interrupt: {}", e);
+            Throwables.propagate(e);
+            return null;
+        }
     }
 
     private synchronized RPC getMethod(String method) {

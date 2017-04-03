@@ -1,5 +1,7 @@
 ## RPCSpeak ##
 
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.dev-smart/microdb-runtime/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.dev-smart/RPCSpeak)
+
 RPCSpeak is a pure-java library for performing Remote Procedure Calls (RPC).
 RPCSpeak's protocol is simular to [JSON-RPC](http://json-rpc.org) except its uses the more efficient
 binary [UBJSON](http://ubjson.org/) format for serializing data.

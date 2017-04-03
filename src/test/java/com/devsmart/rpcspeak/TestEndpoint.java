@@ -40,5 +40,8 @@ public class TestEndpoint {
                 UBValueFactory.createString("one"),
                 UBValueFactory.createInt(2)));
 
+        a.shutdown();
+        b.shutdown();
+
     }
 }

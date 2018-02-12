@@ -57,6 +57,10 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         mOutputWriter = new UBWriter(out);
     }
 
+    public RPCEndpoint(InputStream in, OutputStream out) {
+        this(5, 10, in, out);
+    }
+
     public void setListener(Listener listener) {
         mListener = listener;
     }

@@ -13,7 +13,7 @@ and OutputStream.
 
 ```
 // connect the client
-RCPEndpoint endpoint = new RPCEndpoint(inputStream, outputStream);
+RPCEndpoint endpoint = new RPCEndpoint(inputStream, outputStream);
 endpoint.start();
 
 
@@ -21,7 +21,10 @@ endpoint.start();
 UBArray args = UBValueFactor.createArray();
 UBValue response = endpoint.RPC("hello", args);
 
-// response now has the response from the remote service
+...
+
+//when finished with connection
+endpoint.shutdown();
 
 ```
 
@@ -29,7 +32,7 @@ UBValue response = endpoint.RPC("hello", args);
 
 ```
 // connect the service
-RCPEndpoint endpoint = new RPCEndpoint(inputStream, outputStream);
+RPCEndpoint endpoint = new RPCEndpoint(inputStream, outputStream);
 
 endpoint.registerMethod("hello", new RPC() {
     @Override

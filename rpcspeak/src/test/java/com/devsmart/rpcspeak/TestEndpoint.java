@@ -22,8 +22,8 @@ public class TestEndpoint {
         PipedInputStream inb = new PipedInputStream();
         PipedOutputStream outa = new PipedOutputStream(inb);
 
-        RPCEndpoint a = new RPCEndpoint(1, 2, ina, outa);
-        RPCEndpoint b = new RPCEndpoint(1, 2, inb, outb);
+        RPCEndpoint a = new RPCEndpoint(ina, outa);
+        RPCEndpoint b = new RPCEndpoint(inb, outb);
 
         b.registerMethod("hello", new RPC() {
             @Override

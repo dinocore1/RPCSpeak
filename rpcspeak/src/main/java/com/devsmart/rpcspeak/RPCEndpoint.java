@@ -68,49 +68,60 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
         @Override
         public void run() {
-            while(mRunning) {
-                try {
-                    UBValue msg = mInputReader.read();
+            try {
+                while (mRunning) {
+                    try {
+                        UBValue msg = mInputReader.read();
 
-                    if(msg.isObject()) {
-                        final UBObject msgObj = msg.asObject();
+                        if (msg.isObject()) {
+                            final UBObject msgObj = msg.asObject();
 
-                        UBValue msgType = msgObj.get("type");
-                        if(msgType != null && msgType.isInteger()) {
-                            final int type = msgType.asInt();
-                            switch (type) {
-                                case TYPE_REQUEST:
-                                    mServiceExecutor.execute(new HandleServiceTask(msgObj));
-                                    break;
+                            UBValue msgType = msgObj.get("type");
+                            if (msgType != null && msgType.isInteger()) {
+                                final int type = msgType.asInt();
+                                switch (type) {
+                                    case TYPE_REQUEST:
+                                        mServiceExecutor.execute(new HandleServiceTask(msgObj));
+                                        break;
 
-                                case TYPE_RESPONSE:
-                                    handleResponse(msgObj);
-                                    break;
+                                    case TYPE_RESPONSE:
+                                        handleResponse(msgObj);
+                                        break;
 
-                                case TYPE_SHUTDOWN:
-                                    mServiceExecutor.execute(new Runnable(){
-                                        @Override
-                                        public void run() {
-                                            handleRemoteShutdown(msgObj);
-                                        }
-                                    });
+                                    case TYPE_SHUTDOWN:
+                                        mServiceExecutor.execute(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                handleRemoteShutdown(msgObj);
+                                            }
+                                        });
 
-                                    break;
+                                        break;
 
-                                default:
-                                    throw new IOException("unknown message type:" + type);
+                                    default:
+                                        throw new IOException("unknown message type:" + type);
+                                }
+                            } else {
+                                LOGGER.warn("received unknown object: {}", msgObj);
                             }
-                        } else {
-                            LOGGER.warn("received unknown object: {}", msgObj);
                         }
+
+                    } catch (Exception e) {
+                        LOGGER.error("error reading message: {}", e);
                     }
 
-                } catch (Exception e) {
-                    LOGGER.error("error reading message: {}", e);
                 }
-
+            } finally {
+                mServiceExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        if(mListener != null) {
+                            mListener.onRemoteShutdown();
+                        }
+                    }
+                });
+                mReaderThread = null;
             }
-            mReaderThread = null;
         }
     }
 

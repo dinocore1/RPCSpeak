@@ -33,12 +33,16 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     public static final UBValue EXCEPTION_BUSY = UBValueFactory.createString("Too Busy");
 
 
+    public interface Listener {
+        void onRemoteShutdown();
+    }
 
     private final UBReader mInputReader;
     private final UBWriter mOutputWriter;
     private final BlockingQueue<Runnable> mServiceQueue;
     private final ExecutorService mServiceExecutor;
     private int mRequestId;
+    private Listener mListener;
 
     private boolean mRunning;
     private ReaderThread mReaderThread;
@@ -46,11 +50,15 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     private final HashMap<String, RPC> mMethods = new HashMap<String, RPC>();
     private final HashMap<Integer, HandleRequestTask> mRequests = new HashMap<Integer, HandleRequestTask>();
 
-    RPCEndpoint(int maxNumThreads, int maxQueuedRequests, InputStream in, OutputStream out) {
+    public RPCEndpoint(int maxNumThreads, int maxQueuedRequests, InputStream in, OutputStream out) {
         mServiceQueue = new ArrayBlockingQueue<Runnable>(maxQueuedRequests);
         mServiceExecutor = new ThreadPoolExecutor(1, maxNumThreads, 30, TimeUnit.SECONDS, mServiceQueue, this);
         mInputReader = new UBReader(in);
         mOutputWriter = new UBWriter(out);
+    }
+
+    public void setListener(Listener listener) {
+        mListener = listener;
     }
 
     private class ReaderThread extends Thread {
@@ -65,7 +73,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
                     UBValue msg = mInputReader.read();
 
                     if(msg.isObject()) {
-                        UBObject msgObj = msg.asObject();
+                        final UBObject msgObj = msg.asObject();
 
                         UBValue msgType = msgObj.get("type");
                         if(msgType != null && msgType.isInteger()) {
@@ -77,6 +85,16 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
                                 case TYPE_RESPONSE:
                                     handleResponse(msgObj);
+                                    break;
+
+                                case TYPE_SHUTDOWN:
+                                    mServiceExecutor.execute(new Runnable(){
+                                        @Override
+                                        public void run() {
+                                            handleRemoteShutdown(msgObj);
+                                        }
+                                    });
+
                                     break;
 
                                 default:
@@ -192,6 +210,21 @@ public class RPCEndpoint implements RejectedExecutionHandler{
                 task.notify();
             }
 
+        }
+    }
+
+    private void handleRemoteShutdown(UBObject msgObj) {
+        try {
+            if (mListener != null) {
+                mListener.onRemoteShutdown();
+            }
+            mServiceExecutor.shutdown();
+            mRunning = false;
+            mReaderThread.join();
+            mInputReader.close();
+            mOutputWriter.close();
+        } catch (Exception e) {
+            LOGGER.error("", e);
         }
     }
 

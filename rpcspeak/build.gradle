@@ -1,6 +1,5 @@
 apply plugin: 'java'
-apply plugin: 'maven'
-apply plugin: 'signing'
+apply plugin: 'com.bmuschko.nexus'
 
 compileJava {
     sourceCompatibility = 1.6
@@ -9,69 +8,36 @@ compileJava {
 
 dependencies {
     compile 'org.slf4j:slf4j-api:1.7.7'
-    compile 'com.dev-smart:ubjson:0.1.3'
+    compile 'com.dev-smart:ubjson:0.1.6'
     compile 'com.google.guava:guava:18.0'
     testCompile 'junit:junit:4.11'
 }
 
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
-    from 'build/docs/javadoc'
-}
+modifyPom {
+    project {
+        name 'rpcspeak'
+        description 'Simple RPC library'
+        url 'https://github.com/dinocore1/RPCSpeak'
 
-task sourceJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
-}
-
-artifacts {
-    archives javadocJar
-    archives sourceJar
-}
-
-signing {
-    sign configurations.archives
-}
-
-uploadArchives {
-    repositories.mavenDeployer {
-
-        beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-
-        repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-            authentication(userName: sonatypeUsername, password: sonatypePassword)
+        scm {
+            url 'scm:git@github.com:dinocore1/RPCSpeak.git'
+            connection 'scm:git@git@github.com:dinocore1/RPCSpeak.git'
+            developerConnection 'scm:git@github.com:dinocore1/RPCSpeak.git'
         }
 
-        snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
-            authentication(userName: sonatypeUsername, password: sonatypePassword)
-        }
-
-        pom.project {
-            name 'RPCSpeak'
-            description 'Simple RPC library'
-            url 'https://github.com/dinocore1/RPCSpeak'
-
-            scm {
-                url 'scm:git@github.com:dinocore1/RPCSpeak.git'
-                connection 'scm:git@git@github.com:dinocore1/RPCSpeak.git'
-                developerConnection 'scm:git@github.com:dinocore1/RPCSpeak.git'
-            }
-
-            licenses {
-                license {
-                    name 'MIT License'
-                    url 'https://github.com/dinocore1/RPCSpeak/blob/master/LICENSE.txt'
-                    distribution 'repo'
-                }
-            }
-
-            developers {
-                developer {
-                    id 'psoucy'
-                    name 'Paul Soucy'
-                }
+        licenses {
+            license {
+                name 'MIT License'
+                url 'https://github.com/dinocore1/RPCSpeak/blob/master/LICENSE.txt'
+                distribution 'repo'
             }
         }
 
+        developers {
+            developer {
+                id 'psoucy'
+                name 'Paul Soucy'
+            }
+        }
     }
 }

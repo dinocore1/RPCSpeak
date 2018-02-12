@@ -34,7 +34,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
 
     public interface Listener {
-        void onRemoteShutdown();
+        void onShutdown();
     }
 
     private final UBReader mInputReader;
@@ -70,57 +70,44 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         public void run() {
             try {
                 while (mRunning) {
-                    try {
-                        UBValue msg = mInputReader.read();
 
-                        if (msg.isObject()) {
-                            final UBObject msgObj = msg.asObject();
+                    UBValue msg = mInputReader.read();
 
-                            UBValue msgType = msgObj.get("type");
-                            if (msgType != null && msgType.isInteger()) {
-                                final int type = msgType.asInt();
-                                switch (type) {
-                                    case TYPE_REQUEST:
-                                        mServiceExecutor.execute(new HandleServiceTask(msgObj));
-                                        break;
+                    if (msg.isObject()) {
+                        final UBObject msgObj = msg.asObject();
 
-                                    case TYPE_RESPONSE:
-                                        handleResponse(msgObj);
-                                        break;
+                        UBValue msgType = msgObj.get("type");
+                        if (msgType != null && msgType.isInteger()) {
+                            final int type = msgType.asInt();
+                            switch (type) {
+                                case TYPE_REQUEST:
+                                    mServiceExecutor.execute(new HandleServiceTask(msgObj));
+                                    break;
 
-                                    case TYPE_SHUTDOWN:
-                                        mServiceExecutor.execute(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                handleRemoteShutdown(msgObj);
-                                            }
-                                        });
+                                case TYPE_RESPONSE:
+                                    handleResponse(msgObj);
+                                    break;
 
-                                        break;
+                                case TYPE_SHUTDOWN:
+                                    LOGGER.debug("got shutdown request");
+                                    mRunning = false;
+                                    break;
 
-                                    default:
-                                        throw new IOException("unknown message type:" + type);
-                                }
-                            } else {
-                                LOGGER.warn("received unknown object: {}", msgObj);
+                                default:
+                                    throw new IOException("unknown message type:" + type);
                             }
+                        } else {
+                            LOGGER.warn("received unknown object: {}", msgObj);
                         }
-
-                    } catch (Exception e) {
-                        LOGGER.error("error reading message: {}", e);
                     }
 
                 }
+            } catch (Exception e) {
+                LOGGER.error("", e);
             } finally {
-                mServiceExecutor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        if(mListener != null) {
-                            mListener.onRemoteShutdown();
-                        }
-                    }
-                });
+                mRunning = false;
                 mReaderThread = null;
+                internalShutdown();
             }
         }
     }
@@ -224,20 +211,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         }
     }
 
-    private void handleRemoteShutdown(UBObject msgObj) {
-        try {
-            if (mListener != null) {
-                mListener.onRemoteShutdown();
-            }
-            mServiceExecutor.shutdown();
-            mRunning = false;
-            mReaderThread.join();
-            mInputReader.close();
-            mOutputWriter.close();
-        } catch (Exception e) {
-            LOGGER.error("", e);
-        }
-    }
 
     private void sendMessage(UBValue msg) {
         synchronized (mOutputWriter) {
@@ -260,22 +233,35 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         mReaderThread.start();
     }
 
-    public void shutdown() {
+    public synchronized void shutdown() {
         if(!mRunning) {
             LOGGER.warn("not running");
             return;
         }
 
+        internalShutdown();
+    }
+
+    private void internalShutdown() {
         try {
+            if(mListener != null) {
+                mListener.onShutdown();
+            }
+            mListener = null;
             sendMessage(createShutdownMessage());
-            mServiceExecutor.shutdown();
             mRunning = false;
-            mReaderThread.join();
+            if(mReaderThread != null) {
+                mReaderThread.join();
+            }
+
+            mServiceExecutor.shutdown();
+
             mInputReader.close();
             mOutputWriter.close();
         } catch (Exception e) {
             LOGGER.error("error shutting down: {}", e);
         }
+
     }
 
     public synchronized void registerMethod(String method, RPC obj) {

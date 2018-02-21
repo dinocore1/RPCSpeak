@@ -130,7 +130,12 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
             RPC method = getMethod(mRequest.mMethod);
             if(method != null) {
-                respMsg = createResponse(mRequest.mId, method.invoke(mRequest.mArgs));
+                UBValue responseObj = UBValueFactory.createNull();
+                try {
+                    responseObj = method.invoke(mRequest.mArgs);
+                } finally {
+                    respMsg = createResponse(mRequest.mId, responseObj);
+                }
             } else {
                 respMsg = createUnknownMethodResponse(mRequest.mId);
             }

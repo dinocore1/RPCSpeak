@@ -143,6 +143,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
         final Request mRequest;
         public UBValue mResult;
+        public UBValue mExcept;
 
         void sendRequest() {
             sendMessage(mRequest.toMsg());
@@ -201,17 +202,17 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     private void handleResponse(UBObject msgObj) {
         final int id = msgObj.get(KEY_ID).asInt();
         UBValue result = msgObj.get(KEY_RESULT);
-        if(result != null) {
-            HandleRequestTask task;
-            synchronized (this) {
-                task = mRequests.remove(id);
-            }
+        UBValue exceptObj = msgObj.get(KEY_EXCEPTION);
 
-            synchronized (task) {
-                task.mResult = result;
-                task.notify();
-            }
+        HandleRequestTask task;
+        synchronized (this) {
+            task = mRequests.remove(id);
+        }
 
+        synchronized (task) {
+            task.mResult = result;
+            task.mExcept = exceptObj;
+            task.notify();
         }
     }
 
@@ -277,7 +278,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         mMethods.remove(method);
     }
 
-    public UBValue RPC(String method, UBArray args) {
+    public UBValue RPC(String method, UBArray args) throws RPCException {
         HandleRequestTask requestTask;
         synchronized (this) {
             mRequestId = (mRequestId + 1) % MAX_REQUEST_ID;
@@ -289,7 +290,11 @@ public class RPCEndpoint implements RejectedExecutionHandler{
             synchronized (requestTask) {
                 requestTask.sendRequest();
                 requestTask.wait();
-                return requestTask.mResult;
+                if(requestTask.mExcept != null) {
+                    throw new RPCException(requestTask.mExcept);
+                } else {
+                    return requestTask.mResult;
+                }
             }
         } catch(InterruptedException e){
             LOGGER.error("unepected interrupt: {}", e);

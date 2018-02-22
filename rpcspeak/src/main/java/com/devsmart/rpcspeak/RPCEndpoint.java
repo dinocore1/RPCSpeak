@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.*;
 import static com.google.common.base.Preconditions.*;
 
@@ -32,6 +34,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     public static final UBValue EXCEPTION_UNKNOWNMETHOD = UBValueFactory.createString("Unknown Method");
     public static final UBValue EXCEPTION_BUSY = UBValueFactory.createString("Too Busy");
     public static final UBValue EXCEPTION_THROWN = UBValueFactory.createString("Exception Thrown");
+    public static final UBValue EXCEPTION_SHUTDOWN = UBValueFactory.createString("Shutdown");
 
 
     public interface Listener {
@@ -45,7 +48,6 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     private int mRequestId;
     private Listener mListener;
 
-    private boolean mRunning;
     private ReaderThread mReaderThread;
 
     private final HashMap<String, RPC> mMethods = new HashMap<String, RPC>();
@@ -67,12 +69,16 @@ public class RPCEndpoint implements RejectedExecutionHandler{
     }
 
     private class ReaderThread extends Thread {
+
+        boolean mRunning;
+
         public ReaderThread() {
             super("RPCEndpoint Reader");
         }
 
         @Override
         public void run() {
+            mRunning = true;
             try {
                 while (mRunning) {
 
@@ -111,8 +117,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
                 LOGGER.error("", e);
             } finally {
                 mRunning = false;
-                mReaderThread = null;
-                internalShutdown();
+                shutdown();
             }
         }
     }
@@ -242,37 +247,50 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         }
     }
 
-    public void start() {
-        if(mRunning) {
+    public synchronized void start() {
+        if(mReaderThread != null) {
             LOGGER.warn("already running");
             return;
         }
 
-        mRunning = true;
         mReaderThread = new ReaderThread();
         mReaderThread.start();
     }
 
     public synchronized void shutdown() {
-        if(!mRunning) {
-            LOGGER.warn("not running");
-            return;
-        }
-
         internalShutdown();
     }
 
-    private void internalShutdown() {
+    private synchronized void internalShutdown() {
         try {
+
+            sendMessage(createShutdownMessage());
+
+            if(mReaderThread != null) {
+                mReaderThread.mRunning = false;
+            }
+            mReaderThread = null;
+
+
+            Iterator<Map.Entry<Integer, HandleRequestTask>> it = mRequests.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<Integer, HandleRequestTask> entry = it.next();
+                HandleRequestTask task = entry.getValue();
+                task.mExcept = EXCEPTION_SHUTDOWN;
+
+                it.remove();
+
+                synchronized (task) {
+                    task.notifyAll();
+                }
+            }
+
+
+
             if(mListener != null) {
                 mListener.onShutdown();
             }
             mListener = null;
-            sendMessage(createShutdownMessage());
-            mRunning = false;
-            if(mReaderThread != null) {
-                mReaderThread.join();
-            }
 
             mServiceExecutor.shutdown();
 

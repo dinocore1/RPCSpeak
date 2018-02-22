@@ -31,6 +31,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
     public static final UBValue EXCEPTION_UNKNOWNMETHOD = UBValueFactory.createString("Unknown Method");
     public static final UBValue EXCEPTION_BUSY = UBValueFactory.createString("Too Busy");
+    public static final UBValue EXCEPTION_THROWN = UBValueFactory.createString("Exception Thrown");
 
 
     public interface Listener {
@@ -130,11 +131,11 @@ public class RPCEndpoint implements RejectedExecutionHandler{
 
             RPC method = getMethod(mRequest.mMethod);
             if(method != null) {
-                UBValue responseObj = UBValueFactory.createNull();
                 try {
-                    responseObj = method.invoke(mRequest.mArgs);
-                } finally {
+                    UBValue responseObj = method.invoke(mRequest.mArgs);
                     respMsg = createResponse(mRequest.mId, responseObj);
+                } catch(Throwable e) {
+                    respMsg = createExceptionResponse(mRequest.mId, e);
                 }
             } else {
                 respMsg = createUnknownMethodResponse(mRequest.mId);
@@ -184,6 +185,15 @@ public class RPCEndpoint implements RejectedExecutionHandler{
         msgObj.put(KEY_TYPE, UBValueFactory.createInt(TYPE_RESPONSE));
         msgObj.put(KEY_ID, UBValueFactory.createInt(id));
         msgObj.put(KEY_EXCEPTION, EXCEPTION_UNKNOWNMETHOD);
+
+        return msgObj;
+    }
+
+    private static UBObject createExceptionResponse(int id, Throwable throwable) {
+        UBObject msgObj = UBValueFactory.createObject();
+        msgObj.put(KEY_TYPE, UBValueFactory.createInt(TYPE_RESPONSE));
+        msgObj.put(KEY_ID, UBValueFactory.createInt(id));
+        msgObj.put(KEY_EXCEPTION, EXCEPTION_THROWN);
 
         return msgObj;
     }
@@ -302,7 +312,7 @@ public class RPCEndpoint implements RejectedExecutionHandler{
                 }
             }
         } catch(InterruptedException e){
-            LOGGER.error("unepected interrupt: {}", e);
+            LOGGER.error("unexpected interrupt: {}", e);
             Throwables.propagate(e);
             return null;
         }

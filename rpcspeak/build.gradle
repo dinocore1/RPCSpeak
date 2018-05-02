@@ -8,7 +8,7 @@ compileJava {
 
 dependencies {
     compile 'org.slf4j:slf4j-api:1.7.7'
-    compile 'com.dev-smart:ubjson:0.1.7'
+    compile 'com.dev-smart:ubjson:0.1.8'
     compile 'com.google.guava:guava:18.0'
     testCompile 'junit:junit:4.11'
 }

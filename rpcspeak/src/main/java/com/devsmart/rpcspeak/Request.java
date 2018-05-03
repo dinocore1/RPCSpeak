@@ -7,7 +7,6 @@ import com.devsmart.ubjson.UBValue;
 import com.devsmart.ubjson.UBValueFactory;
 
 public class Request {
-
     final int mId;
     final String mMethod;
     final UBArray mArgs;

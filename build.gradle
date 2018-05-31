@@ -10,7 +10,7 @@ buildscript {
 allprojects {
 
     group = 'com.dev-smart'
-    version = '0.0.4'
+    version = '0.0.5-SNAPSHOT'
     description = 'Simple RPC protocol using ubjson'
 
     repositories {

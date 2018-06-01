@@ -46,8 +46,9 @@ public class SlidingWindowOutputStream extends OutputStream {
         return (BasicStreamingProtocol.HEADER_SIZE + mtu) * (sequenceNum % WINDOW_SIZE);
     }
 
-    void ackReceived(int seqNum) {
-        mSequenceNum = Math.max(mSequenceNum, seqNum);
+    synchronized void ackReceived(int seqNum) {
+        mSequenceNum = Math.max(mAckedSequenceNum, seqNum);
+        notifyAll();
     }
 
     @Override
@@ -72,10 +73,9 @@ public class SlidingWindowOutputStream extends OutputStream {
 
         final int bufferOffset = bufferOffset(mSequenceNum);
 
-        BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset, mSequenceNum, false);
+        BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset, mSequenceNum++, false);
         mSocket.send(mBuffer, bufferOffset, BasicStreamingProtocol.HEADER_SIZE + mByteoffset - 1);
         mByteoffset = 0;
-        mSequenceNum++;
     }
 
     @Override

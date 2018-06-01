@@ -25,7 +25,7 @@ public class BasicStreamingProtocol {
     }
 
     public static void writeHeader(byte[] buff, int offset, int sequenceNum, boolean isAck) {
-        buff[offset + 0] = (byte) ( ((isAck ? 1 : 0) << 8) | ( 0x01 & (sequenceNum >>> 8)) );
+        buff[offset + 0] = (byte) ( ((isAck ? 1 : 0) << 7) | ( 0x01 & (sequenceNum >>> 8)) );
         buff[offset + 1] = (byte) ( 0xFF & sequenceNum );
     }
 

@@ -24,7 +24,7 @@ public class SlidingWindowOutputStream extends OutputStream {
     private int mSequenceNum = 0;
 
     //Highest acknolaged sequence num (n_a)
-    private int mAckedSequenceNum = 0;
+    private int mAckedSequenceNum = -1;
 
     //Window size (w_t)
     private static final int WINDOW_SIZE = 10;
@@ -35,7 +35,7 @@ public class SlidingWindowOutputStream extends OutputStream {
     public SlidingWindowOutputStream(int mtu, DatagramSocket socket) {
         this.mtu = mtu;
         this.mSocket = socket;
-        this.mBuffer = new byte[BasicStreamingProtocol.HEADER_SIZE * mtu * WINDOW_SIZE];
+        this.mBuffer = new byte[(BasicStreamingProtocol.HEADER_SIZE + mtu) * WINDOW_SIZE];
     }
 
     public SlidingWindowOutputStream(DatagramSocket socket) {
@@ -43,13 +43,17 @@ public class SlidingWindowOutputStream extends OutputStream {
     }
 
     private int bufferOffset(int sequenceNum) {
-        return (sequenceNum % WINDOW_SIZE) * BasicStreamingProtocol.HEADER_SIZE * mtu;
+        return (BasicStreamingProtocol.HEADER_SIZE + mtu) * (sequenceNum % WINDOW_SIZE);
+    }
+
+    void ackReceived(int seqNum) {
+        mSequenceNum = Math.max(mSequenceNum, seqNum);
     }
 
     @Override
     public synchronized void write(int i) throws IOException {
-        final int offset = bufferOffset(mSequenceNum) + mByteoffset++;
-        mBuffer[offset] = (byte) (0xFF | i);
+        final int offset = bufferOffset(mSequenceNum) + BasicStreamingProtocol.HEADER_SIZE + mByteoffset++;
+        mBuffer[offset] = (byte) (0xFF & i);
         if(mByteoffset == mtu) {
             sendPacket();
         }
@@ -57,7 +61,8 @@ public class SlidingWindowOutputStream extends OutputStream {
 
     private synchronized void sendPacket() {
 
-        while( BasicStreamingProtocol.normializeSequenceNum(mSequenceNum + WINDOW_SIZE) > mAckedSequenceNum) {
+
+        while( BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum+WINDOW_SIZE)) {
             try {
                 wait(500);
             } catch (InterruptedException e) {
@@ -65,7 +70,10 @@ public class SlidingWindowOutputStream extends OutputStream {
             }
         }
 
-        mSocket.send(mBuffer, bufferOffset(mSequenceNum), mByteoffset);
+        final int bufferOffset = bufferOffset(mSequenceNum);
+
+        BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset, mSequenceNum, false);
+        mSocket.send(mBuffer, bufferOffset, BasicStreamingProtocol.HEADER_SIZE + mByteoffset - 1);
         mByteoffset = 0;
         mSequenceNum++;
     }

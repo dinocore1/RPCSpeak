@@ -15,6 +15,6 @@ public class RandomInputStream extends InputStream {
 
     @Override
     public int read() throws IOException {
-        return 0;
+        return mRandom.nextInt(255);
     }
 }

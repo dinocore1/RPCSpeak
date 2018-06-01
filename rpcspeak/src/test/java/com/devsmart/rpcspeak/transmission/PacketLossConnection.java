@@ -33,28 +33,32 @@ public class PacketLossConnection {
                     byte[] packet = new byte[size];
                     System.arraycopy(buf, offset, packet, 0, size);
                     mSendQueue.offer(packet);
-                    mSendQueue.notify();
+                    mSendQueue.notifyAll();
                 }
             }
         }
 
         @Override
         public int receive(byte[] buf, int offset, int size) {
+            byte[] packet;
+
             synchronized (mReceiveQueue) {
-                byte[] packet = null;
+                packet = mReceiveQueue.poll();
+            }
 
-                while((packet = mReceiveQueue.poll()) == null) {
-                    try {
-                        mReceiveQueue.wait(500);
-                    } catch (InterruptedException e) {
-                        LOGGER.warn("", e);
-                    }
+            if(packet == null) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    LOGGER.warn("", e);
                 }
-
+                return 0;
+            } else {
                 int len = Math.min(size, packet.length);
-                System.arraycopy(buf, offset, packet, 0, len);
+                System.arraycopy(packet, 0, buf, offset, len);
                 return len;
             }
+
         }
     }
 

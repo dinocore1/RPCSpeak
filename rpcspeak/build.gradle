@@ -11,6 +11,7 @@ dependencies {
     compile 'com.dev-smart:ubjson:0.1.8'
     compile 'com.google.guava:guava:18.0'
     testCompile 'junit:junit:4.11'
+    testCompile 'com.dev-smart:devsmart-core:0.1.12'
 }
 
 modifyPom {

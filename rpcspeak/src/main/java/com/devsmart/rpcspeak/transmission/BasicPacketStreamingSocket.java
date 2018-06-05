@@ -15,7 +15,7 @@ public class BasicPacketStreamingSocket {
         @Override
         public void run() {
 
-            byte[] buffer = new byte[mInputStream.mtu + BasicStreamingProtocol.HEADER_SIZE];
+            byte[] buffer = new byte[mInputStream.mtu];
 
             while(mRunning) {
                 int packetLen = mSocket.receive(buffer, 0, buffer.length);

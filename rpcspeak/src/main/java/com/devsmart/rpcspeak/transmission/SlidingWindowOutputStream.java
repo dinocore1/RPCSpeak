@@ -1,6 +1,5 @@
 package com.devsmart.rpcspeak.transmission;
 
-import com.devsmart.rpcspeak.transmission.DatagramSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,9 +18,10 @@ public class SlidingWindowOutputStream extends OutputStream {
     public final int mtu;
     private final DatagramSocket mSocket;
     private final byte[] mBuffer;
+    private final int[] mPacketSizes;
 
     //Current sequence number (n_t) next packet to be transmitted
-    private int mSequenceNum = 0;
+    private int mSequenceNum = 1;
 
     //Highest acknolaged sequence num (n_a)
     private int mAckedSequenceNum = -1;
@@ -36,6 +36,7 @@ public class SlidingWindowOutputStream extends OutputStream {
         this.mtu = mtu;
         this.mSocket = socket;
         this.mBuffer = new byte[(BasicStreamingProtocol.HEADER_SIZE + mtu) * WINDOW_SIZE];
+        this.mPacketSizes = new int[WINDOW_SIZE];
     }
 
     public SlidingWindowOutputStream(DatagramSocket socket) {
@@ -47,35 +48,45 @@ public class SlidingWindowOutputStream extends OutputStream {
     }
 
     synchronized void ackReceived(int seqNum) {
-        mSequenceNum = Math.max(mAckedSequenceNum, seqNum);
+        mAckedSequenceNum = Math.max(mAckedSequenceNum, seqNum);
         notifyAll();
     }
 
     @Override
     public synchronized void write(int i) throws IOException {
-        final int offset = bufferOffset(mSequenceNum) + BasicStreamingProtocol.HEADER_SIZE + mByteoffset++;
-        mBuffer[offset] = (byte) (0xFF & i);
-        if(mByteoffset == mtu) {
-            sendPacket();
-        }
-    }
 
-    private synchronized void sendPacket() {
-
-
-        while( BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum+WINDOW_SIZE)) {
+        while(BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + WINDOW_SIZE)) {
+            sendPackets();
             try {
-                wait(500);
+                Thread.sleep(100);
             } catch (InterruptedException e) {
                 LOGGER.warn("", e);
             }
         }
 
-        final int bufferOffset = bufferOffset(mSequenceNum);
+        final int offset = bufferOffset(mSequenceNum) + BasicStreamingProtocol.HEADER_SIZE + mByteoffset++;
+        mBuffer[offset] = (byte) (0xFF & i);
+        if(mByteoffset == mtu - BasicStreamingProtocol.HEADER_SIZE) {
+            //finalize packet by writing the header
+            BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset(mSequenceNum), mSequenceNum, false);
+            mPacketSizes[mSequenceNum % WINDOW_SIZE] = mByteoffset;
+            sendPacket(mSequenceNum);
+            mByteoffset = 0;
+            mSequenceNum++;
+        }
+    }
 
-        BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset, mSequenceNum++, false);
-        mSocket.send(mBuffer, bufferOffset, BasicStreamingProtocol.HEADER_SIZE + mByteoffset - 1);
-        mByteoffset = 0;
+
+    private void sendPacket(int seqNum) {
+        final int bufferOffset = bufferOffset(seqNum);
+        mSocket.send(mBuffer, bufferOffset, mPacketSizes[seqNum % WINDOW_SIZE] + BasicStreamingProtocol.HEADER_SIZE);
+    }
+
+    private synchronized void sendPackets() {
+        int seqNum = BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + 1);
+        while(seqNum < BasicStreamingProtocol.normializeSequenceNum(mSequenceNum)) {
+            sendPacket(seqNum);
+        }
     }
 
     @Override

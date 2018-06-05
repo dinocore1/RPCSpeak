@@ -1,6 +1,5 @@
 package com.devsmart.rpcspeak.transmission;
 
-import com.devsmart.rpcspeak.transmission.DatagramSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +20,7 @@ public class SlidingWindowInputStream extends InputStream {
     private final DatagramSocket mSocket;
 
     //Current sequence number (n_r) next packet to be received
-    int mSequenceNum;
+    int mSequenceNum = 1;
 
     //Window size (w_t)
     static final int WINDOW_SIZE = 1;
@@ -45,7 +44,7 @@ public class SlidingWindowInputStream extends InputStream {
     synchronized void packetReceived(int seqNum, byte[] buffer, int bufferSize) {
         if(mSequenceNum == seqNum) {
             System.arraycopy(buffer, 0, mBuffer, 0, bufferSize);
-            mPacketSize = bufferSize;
+            mPacketSize = bufferSize - BasicStreamingProtocol.HEADER_SIZE;
             notifyAll();
         }
 
@@ -53,7 +52,7 @@ public class SlidingWindowInputStream extends InputStream {
 
 
     @Override
-    public synchronized int read() throws IOException {
+    synchronized public int read() throws IOException {
 
         int retval;
 

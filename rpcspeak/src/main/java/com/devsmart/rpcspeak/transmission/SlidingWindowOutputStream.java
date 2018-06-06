@@ -55,8 +55,8 @@ public class SlidingWindowOutputStream extends OutputStream {
     @Override
     public synchronized void write(int i) throws IOException {
 
-        while(BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + WINDOW_SIZE)) {
-            sendPackets();
+        while(BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + WINDOW_SIZE-1)) {
+            sendPacket(mAckedSequenceNum + 1);
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -80,13 +80,6 @@ public class SlidingWindowOutputStream extends OutputStream {
     private void sendPacket(int seqNum) {
         final int bufferOffset = bufferOffset(seqNum);
         mSocket.send(mBuffer, bufferOffset, mPacketSizes[seqNum % WINDOW_SIZE] + BasicStreamingProtocol.HEADER_SIZE);
-    }
-
-    private synchronized void sendPackets() {
-        int seqNum = BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + 1);
-        while(seqNum < BasicStreamingProtocol.normializeSequenceNum(mSequenceNum)) {
-            sendPacket(seqNum);
-        }
     }
 
     @Override

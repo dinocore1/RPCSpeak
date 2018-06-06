@@ -61,7 +61,7 @@ public class SlidingWindowInputStream extends InputStream {
                 wait(500);
 
                 //repeat send ack packet
-                BasicStreamingProtocol.writeHeader(mBuffer, 0, mSequenceNum-1, true);
+                BasicStreamingProtocol.writeHeader(mBuffer, 0, mSequenceNum, true);
                 mSocket.send(mBuffer, 0, BasicStreamingProtocol.HEADER_SIZE);
 
             } catch (InterruptedException e) {
@@ -71,9 +71,7 @@ public class SlidingWindowInputStream extends InputStream {
 
         retval = mBuffer[mBufferOffset++];
         if(mBufferOffset == mPacketSize) {
-            //send ack packet
-            BasicStreamingProtocol.writeHeader(mBuffer, 0, mSequenceNum++, true);
-            mSocket.send(mBuffer, 0, BasicStreamingProtocol.HEADER_SIZE);
+            mSequenceNum++;
             mBufferOffset = BasicStreamingProtocol.HEADER_SIZE;
             mPacketSize = 0;
         }

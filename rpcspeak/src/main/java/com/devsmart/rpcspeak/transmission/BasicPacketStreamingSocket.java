@@ -18,6 +18,9 @@ public class BasicPacketStreamingSocket {
             byte[] buffer = new byte[mInputStream.mtu];
 
             while(mRunning) {
+
+                mOutputStream.push();
+
                 int packetLen = mSocket.receive(buffer, 0, buffer.length);
                 if(packetLen > 0) {
                     int seqNum = BasicStreamingProtocol.readSequenceNum(buffer, 0);

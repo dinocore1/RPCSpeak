@@ -95,6 +95,9 @@ public class CircleByteBufferTest {
         assertEquals(1, buff.getAvailable());
         assertEquals((byte) 0x1, outputBuff[0]);
         assertEquals((byte) 0x2, outputBuff[1]);
+        bytesRead = buff.get(outputBuff, 0, outputBuff.length);
+        assertEquals(1, bytesRead);
+        assertEquals((byte) 0x3, outputBuff[0]);
 
     }
 }

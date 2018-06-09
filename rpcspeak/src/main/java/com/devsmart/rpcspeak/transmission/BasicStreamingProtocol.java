@@ -21,7 +21,7 @@ public class BasicStreamingProtocol {
     private static final int MAX_SEQUENCE_NUM = 0x1000;
 
     public static final int normializeSequenceNum(int input) {
-        return input % MAX_SEQUENCE_NUM;
+        return (input + MAX_SEQUENCE_NUM) % MAX_SEQUENCE_NUM;
     }
 
     public static void writeHeader(byte[] buff, int offset, int sequenceNum, boolean isAck) {

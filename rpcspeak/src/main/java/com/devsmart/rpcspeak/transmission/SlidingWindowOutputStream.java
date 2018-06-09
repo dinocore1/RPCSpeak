@@ -24,9 +24,6 @@ public class SlidingWindowOutputStream extends OutputStream {
     private final DatagramSocket mSocket;
     private CircleByteBuffer mOutputBuffer;
 
-    //Current sequence number (n_t) next packet to be transmitted
-    private int mN_t = 0;
-
     //Highest acknolaged sequence num (n_a)
     private int mN_a = 0;
 
@@ -49,6 +46,7 @@ public class SlidingWindowOutputStream extends OutputStream {
         if(diff > 0) {
             mOutputBuffer.skip(diff);
             mN_a += diff;
+            mN_a = BasicStreamingProtocol.normializeSequenceNum(mN_a);
         }
 
         notifyAll();
@@ -70,14 +68,17 @@ public class SlidingWindowOutputStream extends OutputStream {
     void push() {
 
         synchronized (this) {
-            int size = mOutputBuffer.getAvailable();
+            int available = mOutputBuffer.getAvailable();
 
-            if(size > 0 && mN_t < mN_a + WINDOW_SIZE) {
-                size = Math.min(size, mN_a + WINDOW_SIZE - mN_t);
-                size = Math.min(size, mTempBuffer.length - BasicStreamingProtocol.HEADER_SIZE);
-                size = mOutputBuffer.peek(mTempBuffer, BasicStreamingProtocol.HEADER_SIZE, size, 0);
-                BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a, false);
+            if(available > 0) {
+
+                int size = Math.min(available, mTempBuffer.length - BasicStreamingProtocol.HEADER_SIZE);
+                size = Math.min(size, available - mSendIdx);
+                size = mOutputBuffer.peek(mTempBuffer, BasicStreamingProtocol.HEADER_SIZE, size, mSendIdx);
+                BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a + mSendIdx, false);
                 mSocket.send(mTempBuffer, 0, size + BasicStreamingProtocol.HEADER_SIZE);
+                mSendIdx = (mSendIdx + size) % available;
+
             }
         }
 

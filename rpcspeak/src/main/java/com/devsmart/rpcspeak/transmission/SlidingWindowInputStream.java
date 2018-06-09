@@ -51,6 +51,7 @@ public class SlidingWindowInputStream extends InputStream {
             int offset = mN_r - seqNum;
             int bytesWritten = mDataBuffer.put(buffer, offset + BasicStreamingProtocol.HEADER_SIZE, size);
             mN_r += bytesWritten;
+            mN_r = BasicStreamingProtocol.normializeSequenceNum(mN_r);
 
             notifyAll();
         }

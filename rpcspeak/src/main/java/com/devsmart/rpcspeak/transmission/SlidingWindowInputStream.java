@@ -46,7 +46,7 @@ public class SlidingWindowInputStream extends InputStream {
         int free;
         int end = seqNum + bufferSize - BasicStreamingProtocol.HEADER_SIZE;
 
-        if(seqNum <= mN_r && mN_r <= end && (free = mDataBuffer.free()) > 0) {
+        if(seqNum <= mN_r && mN_r < end && (free = mDataBuffer.free()) > 0) {
             int size = Math.min(free, end - mN_r);
             int offset = mN_r - seqNum;
             int bytesWritten = mDataBuffer.put(buffer, offset + BasicStreamingProtocol.HEADER_SIZE, size);

@@ -21,13 +21,13 @@ public class SlidingWindowOutputStream extends OutputStream {
     private final int[] mPacketSizes;
 
     //Current sequence number (n_t) next packet to be transmitted
-    private int mSequenceNum = 1;
+    private int mN_t = 1;
 
     //Highest acknolaged sequence num (n_a)
-    private int mAckedSequenceNum = -1;
+    private int mN_a = -1;
 
     //Window size (w_t)
-    private static final int WINDOW_SIZE = 10;
+    private static final int WINDOW_SIZE = 1024;
 
     //the offset within the unsent packet the next byte will be written
     private int mByteoffset = 0;
@@ -48,15 +48,15 @@ public class SlidingWindowOutputStream extends OutputStream {
     }
 
     synchronized void ackReceived(int seqNum) {
-        mAckedSequenceNum = Math.max(mAckedSequenceNum, seqNum);
+        mN_a = Math.max(mN_a, seqNum);
         notifyAll();
     }
 
     @Override
     public synchronized void write(int i) throws IOException {
 
-        while(BasicStreamingProtocol.normializeSequenceNum(mSequenceNum) > BasicStreamingProtocol.normializeSequenceNum(mAckedSequenceNum + WINDOW_SIZE-1)) {
-            sendPacket(mAckedSequenceNum + 1);
+        while(BasicStreamingProtocol.normializeSequenceNum(mN_t) > BasicStreamingProtocol.normializeSequenceNum(mN_a + WINDOW_SIZE-1)) {
+            sendPacket(mN_a + 1);
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -64,15 +64,15 @@ public class SlidingWindowOutputStream extends OutputStream {
             }
         }
 
-        final int offset = bufferOffset(mSequenceNum) + BasicStreamingProtocol.HEADER_SIZE + mByteoffset++;
+        final int offset = bufferOffset(mN_t) + BasicStreamingProtocol.HEADER_SIZE + mByteoffset++;
         mBuffer[offset] = (byte) (0xFF & i);
         if(mByteoffset == mtu - BasicStreamingProtocol.HEADER_SIZE) {
             //finalize packet by writing the header
-            BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset(mSequenceNum), mSequenceNum, false);
-            mPacketSizes[mSequenceNum % WINDOW_SIZE] = mByteoffset;
-            sendPacket(mSequenceNum);
+            BasicStreamingProtocol.writeHeader(mBuffer, bufferOffset(mN_t), mN_t, false);
+            mPacketSizes[mN_t % WINDOW_SIZE] = mByteoffset;
+            sendPacket(mN_t);
             mByteoffset = 0;
-            mSequenceNum++;
+            mN_t++;
         }
     }
 

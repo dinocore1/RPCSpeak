@@ -20,6 +20,7 @@ public class BasicPacketStreamingSocket {
             while(mRunning) {
 
                 mOutputStream.push();
+                mInputStream.push();
 
                 int packetLen = mSocket.receive(buffer, 0, buffer.length);
                 if(packetLen > 0) {

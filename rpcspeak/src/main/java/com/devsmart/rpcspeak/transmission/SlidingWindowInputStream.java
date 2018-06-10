@@ -29,6 +29,7 @@ public class SlidingWindowInputStream extends InputStream {
 
     private CircleByteBuffer mDataBuffer;
     private byte[] mTmpBuffer = new byte[BasicStreamingProtocol.HEADER_SIZE];
+    private int mTotal;
 
     public SlidingWindowInputStream(int mtu, DatagramSocket socket) {
         this.mtu = mtu;
@@ -46,13 +47,14 @@ public class SlidingWindowInputStream extends InputStream {
         //    seqNum += BasicStreamingProtocol.MAX_SEQUENCE_NUM;
         //}
 
-        int free;
+        int free = mDataBuffer.free();
         int end = seqNum + bufferSize - BasicStreamingProtocol.HEADER_SIZE;
 
-        if(seqNum <= mN_r && mN_r < end && (free = mDataBuffer.free()) > 0) {
+        if(seqNum <= mN_r && mN_r < end && free > 0) {
             int size = Math.min(free, end - mN_r);
             int offset = mN_r - seqNum;
             int bytesWritten = mDataBuffer.put(buffer, offset + BasicStreamingProtocol.HEADER_SIZE, size);
+            mTotal += bytesWritten;
             mN_r = (mN_r + bytesWritten) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
 
             notifyAll();
@@ -62,6 +64,14 @@ public class SlidingWindowInputStream extends InputStream {
         BasicStreamingProtocol.writeHeader(mTmpBuffer, 0, mN_r, true);
         mSocket.send(mTmpBuffer, 0, BasicStreamingProtocol.HEADER_SIZE);
 
+    }
+
+    void push() {
+        synchronized (this) {
+
+
+
+        }
     }
 
 

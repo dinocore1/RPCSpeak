@@ -27,6 +27,7 @@ public class SlidingWindowOutputStream extends OutputStream {
     //Highest acknolaged sequence num (n_a)
     private int mN_a = 0;
     private int mN_t;
+    private int mTotal;
 
     public SlidingWindowOutputStream(int mtu, DatagramSocket socket) {
         this.mtu = mtu;
@@ -52,6 +53,7 @@ public class SlidingWindowOutputStream extends OutputStream {
         }
 
         if(diff > 0) {
+            mTotal += diff;
             mOutputBuffer.skip(diff);
             mN_a = (mN_a + diff) % (BasicStreamingProtocol.MAX_SEQUENCE_NUM);
         }

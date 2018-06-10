@@ -18,7 +18,7 @@ public class SlidingWindowInputStream extends InputStream {
 
 
     //Window size (w_t)
-    static final int WINDOW_SIZE = 1;
+    static final int WINDOW_SIZE = 1024;
 
     public final int mtu;
     private final DatagramSocket mSocket;
@@ -42,6 +42,9 @@ public class SlidingWindowInputStream extends InputStream {
     }
 
     synchronized void packetReceived(int seqNum, byte[] buffer, int bufferSize) {
+        //if(seqNum < mN_r) {
+        //    seqNum += BasicStreamingProtocol.MAX_SEQUENCE_NUM;
+        //}
 
         int free;
         int end = seqNum + bufferSize - BasicStreamingProtocol.HEADER_SIZE;
@@ -50,8 +53,7 @@ public class SlidingWindowInputStream extends InputStream {
             int size = Math.min(free, end - mN_r);
             int offset = mN_r - seqNum;
             int bytesWritten = mDataBuffer.put(buffer, offset + BasicStreamingProtocol.HEADER_SIZE, size);
-            mN_r += bytesWritten;
-            mN_r = BasicStreamingProtocol.normializeSequenceNum(mN_r);
+            mN_r = (mN_r + bytesWritten) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
 
             notifyAll();
         }

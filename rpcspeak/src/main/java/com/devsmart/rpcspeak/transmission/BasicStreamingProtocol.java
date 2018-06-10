@@ -18,7 +18,7 @@ public class BasicStreamingProtocol {
 
     public static final int HEADER_SIZE = 2;
 
-    private static final int MAX_SEQUENCE_NUM = 0x1000;
+    public static final int MAX_SEQUENCE_NUM = 0x1000;
 
     public static final int normializeSequenceNum(int input) {
         return (input + MAX_SEQUENCE_NUM) % MAX_SEQUENCE_NUM;

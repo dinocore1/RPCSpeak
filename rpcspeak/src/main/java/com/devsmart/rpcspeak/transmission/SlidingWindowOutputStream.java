@@ -15,12 +15,10 @@ public class SlidingWindowOutputStream extends OutputStream {
      * This implementation assumes a fixed size MTU
      */
 
-    //Window size (w_t)
-    private static final int WINDOW_SIZE = 1024;
-
     public byte[] mTempBuffer;
 
-    public final int mtu;
+    // w_t
+    public final int mWindowSize;
     private final DatagramSocket mSocket;
     private CircleByteBuffer mOutputBuffer;
 
@@ -29,11 +27,11 @@ public class SlidingWindowOutputStream extends OutputStream {
     private int mN_t;
     private int mTotal;
 
-    public SlidingWindowOutputStream(int mtu, DatagramSocket socket) {
-        this.mtu = mtu;
+    public SlidingWindowOutputStream(int windowSize, DatagramSocket socket) {
+        this.mWindowSize = windowSize;
         this.mSocket = socket;
-        mOutputBuffer = new CircleByteBuffer(WINDOW_SIZE);
-        mTempBuffer = new byte[mtu];
+        mOutputBuffer = new CircleByteBuffer(windowSize);
+        mTempBuffer = new byte[mWindowSize + BasicStreamingProtocol.HEADER_SIZE];
     }
 
     public SlidingWindowOutputStream(DatagramSocket socket) {
@@ -77,18 +75,22 @@ public class SlidingWindowOutputStream extends OutputStream {
     void push() {
 
         synchronized (this) {
+
+            int bytesWritten = 0;
             int available = mOutputBuffer.getAvailable();
+            available = Math.min(available, mTempBuffer.length - BasicStreamingProtocol.HEADER_SIZE);
 
-            if(available > 0) {
-
-                int size = Math.min(available, mTempBuffer.length - BasicStreamingProtocol.HEADER_SIZE);
-                size = mOutputBuffer.peek(mTempBuffer, BasicStreamingProtocol.HEADER_SIZE, size, 0);
-                mN_t = mN_a + size;
-                BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a, false);
-                mSocket.send(mTempBuffer, 0, size + BasicStreamingProtocol.HEADER_SIZE);
-                //mSendIdx = (mSendIdx + size) % WINDOW_SIZE;
-
+            while(available > 0) {
+                int count = mOutputBuffer.peek(mTempBuffer, BasicStreamingProtocol.HEADER_SIZE + bytesWritten, available, bytesWritten);
+                bytesWritten += count;
+                available -= count;
             }
+
+            if(bytesWritten > 0) {
+                BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a, false);
+                mSocket.send(mTempBuffer, 0, BasicStreamingProtocol.HEADER_SIZE + bytesWritten);
+            }
+
         }
 
     }

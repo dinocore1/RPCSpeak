@@ -100,4 +100,38 @@ public class CircleByteBufferTest {
         assertEquals((byte) 0x3, outputBuff[0]);
 
     }
+
+    @Test
+    public void testPeak() {
+        byte[] outputBuff = new byte[10];
+        CircleByteBuffer buff = new CircleByteBuffer(3);
+        buff.put((byte) 0x0);
+        buff.put((byte) 0x1);
+
+        int bytesRead = buff.peek(outputBuff, 0, outputBuff.length, 0);
+        assertEquals(2, bytesRead);
+        assertEquals((byte) 0x0, outputBuff[0]);
+        assertEquals((byte) 0x1, outputBuff[1]);
+    }
+
+
+    @Test
+    public void testPeakAcrossBoundary() {
+        byte[] outputBuff = new byte[10];
+        CircleByteBuffer buff = new CircleByteBuffer(3);
+        buff.put((byte) 0x0);
+        buff.put((byte) 0x1);
+        buff.put((byte) 0x2);
+        buff.get();
+        buff.put((byte) 0x3);
+
+        int bytesRead = buff.peek(outputBuff, 0, outputBuff.length, 0);
+        assertEquals(2, bytesRead);
+        assertEquals((byte) 0x1, outputBuff[0]);
+        assertEquals((byte) 0x2, outputBuff[1]);
+        bytesRead = buff.peek(outputBuff, 2, outputBuff.length, 2);
+        assertEquals(1, bytesRead);
+        assertEquals((byte) 0x3, outputBuff[2]);
+
+    }
 }

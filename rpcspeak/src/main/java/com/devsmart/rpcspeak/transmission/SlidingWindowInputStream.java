@@ -16,12 +16,11 @@ public class SlidingWindowInputStream extends InputStream {
      * This implementation assumes a fixed size MTU
      */
 
+    private static final int WINDOW_SIZE = 1;
 
-    //Window size (w_t)
-    static final int WINDOW_SIZE = 1024;
-
-    public final int mtu;
+    public final int bufferSize;
     private final DatagramSocket mSocket;
+
 
     //Current sequence number (n_r) next packet to be received
     int mN_r = 0;
@@ -29,13 +28,11 @@ public class SlidingWindowInputStream extends InputStream {
 
     private CircleByteBuffer mDataBuffer;
     private byte[] mTmpBuffer = new byte[BasicStreamingProtocol.HEADER_SIZE];
-    private int mTotal;
 
-    public SlidingWindowInputStream(int mtu, DatagramSocket socket) {
-        this.mtu = mtu;
+    public SlidingWindowInputStream(int bufferSize, DatagramSocket socket) {
+        this.bufferSize = bufferSize;
         mSocket = socket;
-
-        mDataBuffer = new CircleByteBuffer(mtu);
+        mDataBuffer = new CircleByteBuffer(bufferSize);
     }
 
     public SlidingWindowInputStream(DatagramSocket socket) {
@@ -43,22 +40,21 @@ public class SlidingWindowInputStream extends InputStream {
     }
 
     synchronized void packetReceived(int seqNum, byte[] buffer, int bufferSize) {
-        //if(seqNum < mN_r) {
-        //    seqNum += BasicStreamingProtocol.MAX_SEQUENCE_NUM;
-        //}
 
         int free = mDataBuffer.free();
-        int end = seqNum + bufferSize - BasicStreamingProtocol.HEADER_SIZE;
 
-        if(seqNum <= mN_r && mN_r < end && free > 0) {
-            int size = Math.min(free, end - mN_r);
-            int offset = mN_r - seqNum;
-            int bytesWritten = mDataBuffer.put(buffer, offset + BasicStreamingProtocol.HEADER_SIZE, size);
-            mTotal += bytesWritten;
-            mN_r = (mN_r + bytesWritten) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
+        for(int i=0;i<bufferSize-BasicStreamingProtocol.HEADER_SIZE;i++) {
 
-            notifyAll();
+            if(free > 0 && mN_r == (seqNum + i) % BasicStreamingProtocol.MAX_SEQUENCE_NUM) {
+
+                mDataBuffer.put(buffer[BasicStreamingProtocol.HEADER_SIZE + i]);
+                mN_r = (mN_r + 1) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
+                free--;
+
+            }
         }
+
+        notifyAll();
 
         //send ack packet
         BasicStreamingProtocol.writeHeader(mTmpBuffer, 0, mN_r, true);
@@ -68,9 +64,6 @@ public class SlidingWindowInputStream extends InputStream {
 
     void push() {
         synchronized (this) {
-
-
-
         }
     }
 
@@ -86,7 +79,7 @@ public class SlidingWindowInputStream extends InputStream {
             }
         }
 
-        return mDataBuffer.get();
+        return (0xFF & mDataBuffer.get());
     }
 
 

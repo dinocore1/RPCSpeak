@@ -15,7 +15,7 @@ public class BasicPacketStreamingSocket {
         @Override
         public void run() {
 
-            byte[] buffer = new byte[mInputStream.mtu];
+            byte[] buffer = new byte[mInputStream.bufferSize];
 
             while(mRunning) {
 

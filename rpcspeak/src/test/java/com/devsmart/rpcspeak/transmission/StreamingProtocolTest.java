@@ -57,11 +57,11 @@ public class StreamingProtocolTest {
         });
 
 
-        final byte[] readData = new byte[5000];
+        final byte[] readData = new byte[numBytes];
         DataInputStream din = new DataInputStream(socketB.getInputStream());
         din.readFully(readData);
 
-        for(int i=0;i<5000;i++) {
+        for(int i=0;i<numBytes;i++) {
             assertEquals("fail at i: " + i, data[i], readData[i]);
         }
 

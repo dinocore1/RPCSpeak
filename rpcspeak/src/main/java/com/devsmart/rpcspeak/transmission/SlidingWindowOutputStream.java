@@ -41,20 +41,18 @@ public class SlidingWindowOutputStream extends OutputStream {
 
     synchronized void ackReceived(int seqNum) {
 
-        int diff;
-        if(seqNum < mN_a) {
-            diff = seqNum;
-            diff += BasicStreamingProtocol.MAX_SEQUENCE_NUM - mN_a;
-
-        } else {
-            diff = seqNum - mN_a;
-        }
-
-        if(diff > 0) {
-            mTotal += diff;
+        if(mN_a <= seqNum) {
+            int diff = seqNum - mN_a;
             mOutputBuffer.skip(diff);
-            mN_a = (mN_a + diff) % (BasicStreamingProtocol.MAX_SEQUENCE_NUM);
+            mN_a = seqNum;
+        } else {
+            int diff = BasicStreamingProtocol.MAX_SEQUENCE_NUM - mN_a;
+            diff += seqNum;
+            mOutputBuffer.skip(diff);
+            mN_a = seqNum;
         }
+
+
 
         notifyAll();
     }
@@ -89,6 +87,7 @@ public class SlidingWindowOutputStream extends OutputStream {
             if(bytesWritten > 0) {
                 BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a, false);
                 mSocket.send(mTempBuffer, 0, BasicStreamingProtocol.HEADER_SIZE + bytesWritten);
+                mN_t = (mN_a + bytesWritten) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
             }
 
         }

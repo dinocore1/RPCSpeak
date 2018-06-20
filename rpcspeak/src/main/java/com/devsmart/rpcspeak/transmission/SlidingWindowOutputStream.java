@@ -22,10 +22,8 @@ public class SlidingWindowOutputStream extends OutputStream {
     private final DatagramSocket mSocket;
     private CircleByteBuffer mOutputBuffer;
 
-    //Highest acknolaged sequence num (n_a)
+    //Highest acknowledged sequence num (n_a)
     private int mN_a = 0;
-    private int mN_t;
-    private int mTotal;
 
     public SlidingWindowOutputStream(int windowSize, DatagramSocket socket) {
         this.mWindowSize = windowSize;
@@ -62,12 +60,34 @@ public class SlidingWindowOutputStream extends OutputStream {
 
         while(!mOutputBuffer.put((byte) i)) {
             try {
-                wait(100);
+                wait(1000);
             } catch (InterruptedException e) {
                 LOGGER.warn("", e);
             }
         }
 
+    }
+
+    @Override
+    public synchronized void write(byte[] b, int off, int len) throws IOException {
+        int bytesWritten = 0;
+        while(len > 0) {
+            int count = mOutputBuffer.put(b, off + bytesWritten, len);
+            bytesWritten += count;
+            len -= count;
+
+
+            push();
+
+            if(count == 0) {
+                try {
+                    wait(1000);
+                } catch (InterruptedException e) {
+                    LOGGER.warn("", e);
+                }
+            }
+
+        }
     }
 
     void push() {
@@ -87,7 +107,6 @@ public class SlidingWindowOutputStream extends OutputStream {
             if(bytesWritten > 0) {
                 BasicStreamingProtocol.writeHeader(mTempBuffer, 0, mN_a, false);
                 mSocket.send(mTempBuffer, 0, BasicStreamingProtocol.HEADER_SIZE + bytesWritten);
-                mN_t = (mN_a + bytesWritten) % BasicStreamingProtocol.MAX_SEQUENCE_NUM;
             }
 
         }

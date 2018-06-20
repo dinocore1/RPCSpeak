@@ -21,6 +21,7 @@ public class StreamingProtocolTest {
     @Before
     public void setup() {
         mPacketLossConnection = new PacketLossConnection(new Random(1));
+        mPacketLossConnection.mProbilibityOfPacketLoss = 0.01f;
     }
 
 
